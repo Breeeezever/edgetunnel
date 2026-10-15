@@ -1,44 +1,62 @@
-name: Upstream Sync
+name: Sync upstream (anchored)
+
+on:
+  schedule:
+    - cron: "10 0 * * *"
+  workflow_dispatch:
 
 permissions:
   contents: write
 
-on:
-  schedule:
-    - cron: "0 0 * * *" # every day
-  workflow_dispatch:
+concurrency:
+  group: sync-upstream-anchored
+  cancel-in-progress: false
+
+env:
+  UPSTREAM: "cmliu/edgetunnel"
+  UPSTREAM_BRANCH: "main"
 
 jobs:
-  sync_latest_from_upstream:
-    name: Sync latest commits from upstream repo
+  sync:
     runs-on: ubuntu-latest
-    if: ${{ github.event.repository.fork }}
-
+    timeout-minutes: 30
     steps:
-      - name: Checkout target repo
-        uses: actions/checkout@v6
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-          ref: main
 
-      - name: Sync upstream changes
+      - name: Backup anchor (tag current state)
         run: |
-          git config user.name "GH Action - Upstream Sync"
-          git config user.email "action@github.com"
-
-          git remote add upstream https://github.com/cmliu/edgetunnel.git
-          git fetch upstream main
-
-          if git diff --quiet HEAD upstream/main; then
-            # 内容和上游一致，直接对齐，顺带清理历史分叉留下的多余 merge commit
-            git reset --hard upstream/main
-            git push --force-with-lease origin main
+          TAG="backup/$(date -u +%Y-%m-%d)"
+          if git ls-remote --exit-code origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Anchor $TAG already exists, skip."
           else
-            # 有本地修改，保持原来的合并方式，不覆盖任何人的改动
-            if ! git pull --no-rebase upstream main; then
-              echo "[Error] 合并上游变更产生冲突，自动同步已暂停，请手动 Sync Fork 并解决冲突。"
-              echo "[Error] Merge conflict detected while syncing upstream. Please sync your fork manually and resolve the conflicts."
-              exit 1
-            fi
-            git push origin main
+            git tag "$TAG"
+            git push origin "$TAG"
+            echo "Anchor created: $TAG -> $(git rev-parse HEAD)"
           fi
+
+      - name: Guard checks
+        run: |
+          git remote add upstream "https://github.com/${UPSTREAM}.git"
+          git fetch upstream "$UPSTREAM_BRANCH"
+          if ! git merge-base HEAD "upstream/$UPSTREAM_BRANCH" >/dev/null 2>&1; then
+            echo "::error::No common ancestor - upstream history may have been rewritten, aborting."; exit 1
+          fi
+          BEFORE=$(git ls-tree -r --name-only HEAD | wc -l)
+          AFTER=$(git ls-tree -r --name-only "upstream/$UPSTREAM_BRANCH" | wc -l)
+          echo "File count: $BEFORE -> $AFTER"
+          if [ "$BEFORE" -gt 5 ] && [ "$AFTER" -lt $((BEFORE * 30 / 100)) ]; then
+            echo "::error::File count dropped sharply $BEFORE -> $AFTER - upstream branch may have been wiped, aborting."; exit 1
+          fi
+
+      - name: Merge upstream (merge-only, never reset)
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git merge-base --is-ancestor HEAD "upstream/$UPSTREAM_BRANCH"; then
+            git merge --ff-only "upstream/$UPSTREAM_BRANCH"
+          else
+            git merge --no-ff --no-edit "upstream/$UPSTREAM_BRANCH"
+          fi
+          git push origin "HEAD:${{ github.ref_name }}"
