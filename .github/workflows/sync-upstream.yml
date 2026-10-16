@@ -69,13 +69,19 @@ jobs:
           fi
           # GITHUB_TOKEN 无法修改 workflow 文件：将 .github/workflows 整体冻结在 fork 当前版本
           # （包括上游新增的 workflow 文件也要剔除，否则 push 仍会被拒绝）
-          # 1) delete workflow files added upstream but absent in fork pre-merge
-          git diff-tree -r --name-only --diff-filter=A "HEAD~1" HEAD -- .github/workflows | while read -r f; do
-            [ -n "$f" ] && git rm -q -f "$f"
-          done
-          # 2) restore all workflow file contents to fork pre-merge state
-          git checkout "HEAD~1" -- .github/workflows 2>/dev/null || true
-          if ! git diff --quiet HEAD; then
-            git commit --amend --no-edit --allow-empty >/dev/null || git commit --amend --no-edit >/dev/null
+          # 仅当本次运行真正创建了 merge commit（存在第二父）才执行 freeze，
+          # 否则 HEAD~1 是上一次的普通提交，amend 会改写它导致 push non-fast-forward
+          if git rev-parse -q --verify HEAD^2 >/dev/null 2>&1; then
+            # 1) delete workflow files added upstream but absent in fork pre-merge
+            git diff-tree -r --name-only --diff-filter=A "HEAD~1" HEAD -- .github/workflows | while read -r f; do
+              [ -n "$f" ] && git rm -q -f "$f"
+            done
+            # 2) restore all workflow file contents to fork pre-merge state
+            git checkout "HEAD~1" -- .github/workflows 2>/dev/null || true
+            if ! git diff --quiet HEAD; then
+              git commit --amend --no-edit >/dev/null
+            fi
+            git push origin "HEAD:${{ github.ref_name }}"
+          else
+            echo "No merge commit created (already up to date); nothing to push."
           fi
-          git push origin "HEAD:${{ github.ref_name }}"
