@@ -76,6 +76,6 @@ jobs:
           # 2) restore all workflow file contents to fork pre-merge state
           git checkout "HEAD~1" -- .github/workflows 2>/dev/null || true
           if ! git diff --quiet HEAD; then
-            git commit --amend --no-edit >/dev/null
+            git commit --amend --no-edit --allow-empty >/dev/null || git commit --amend --no-edit >/dev/null
           fi
           git push origin "HEAD:${{ github.ref_name }}"
