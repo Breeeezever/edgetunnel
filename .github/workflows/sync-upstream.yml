@@ -65,12 +65,12 @@ jobs:
             fi
             git checkout --ours -- .github/workflows 2>/dev/null || true
             git add -A .github/workflows
-            git merge --continue
+            git commit --no-edit
           fi
-          # GITHUB_TOKEN ÎÞ·¨ÐÞ¸Ä workflow ÎÄ¼þ£º½« .github/workflows ÕûÌå¶³½áÔÚ fork µ±Ç°°æ±¾
-          # £¨°üÀ¨ÉÏÓÎÐÂÔöµÄ workflow ÎÄ¼þÒ²ÒªÌÞ³ý£¬·ñÔò push ÈÔ»á±»¾Ü¾ø£©
-          # ½öµ±±¾´ÎÔËÐÐÕæÕý´´½¨ÁË merge commit£¨´æÔÚµÚ¶þ¸¸£©²ÅÖ´ÐÐ freeze£¬
-          # ·ñÔò HEAD~1 ÊÇÉÏÒ»´ÎµÄÆÕÍ¨Ìá½»£¬amend »á¸ÄÐ´Ëüµ¼ÖÂ push non-fast-forward
+          # GITHUB_TOKEN æ— æ³•ä¿®æ”¹ workflow æ–‡ä»¶ï¼šå°† .github/workflows æ•´ä½“å†»ç»“åœ¨ fork å½“å‰ç‰ˆæœ¬
+          # ï¼ˆåŒ…æ‹¬ä¸Šæ¸¸æ–°å¢žçš„ workflow æ–‡ä»¶ä¹Ÿè¦å‰”é™¤ï¼Œå¦åˆ™ push ä»ä¼šè¢«æ‹’ç»ï¼‰
+          # ä»…å½“æœ¬æ¬¡è¿è¡ŒçœŸæ­£åˆ›å»ºäº† merge commitï¼ˆå­˜åœ¨ç¬¬äºŒçˆ¶ï¼‰æ‰æ‰§è¡Œ freezeï¼Œ
+          # å¦åˆ™ HEAD~1 æ˜¯ä¸Šä¸€æ¬¡çš„æ™®é€šæäº¤ï¼Œamend ä¼šæ”¹å†™å®ƒå¯¼è‡´ push non-fast-forward
           if git rev-parse -q --verify HEAD^2 >/dev/null 2>&1; then
             # 1) delete workflow files added upstream but absent in fork pre-merge
             git diff-tree -r --name-only --diff-filter=A "HEAD~1" HEAD -- .github/workflows | while read -r f; do
